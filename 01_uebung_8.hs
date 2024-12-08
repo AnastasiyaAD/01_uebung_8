@@ -373,20 +373,126 @@ instance RelationPlus IstPartnerstadtVon1 where
 instance RelationPlus IstPartnerstadtVon3 where
     vereinigeR (IPV3 m1) (IPV3 m2) = IPV3 $ vereinigeMT3 m1 m2
 
+--------------------------------------------------------------------------------- A.2 --------------------------------------------------------------------------
+type Coordinate = (Int, Int)
+data Baumhain = Rectangle { x :: Int, y :: Int, lengthX :: Int, widthY :: Int } deriving (Show) -- die Figur auf dem Spielfeld ist wie ein Schiff im Spiel Seeschlacht
+data Orientation = Links | Rechts | Nicht deriving (Show, Eq) -- Ausrichtung der Figur auf dem Spielfeld z.B. 2x4 - Links, 4x2 - Rechts                   
+type Field = [[Int]] -- ein Spielfeld, in dem alle "Zellen", die von einer Spielfigur besetzt werden, 1 sind, die freien Zellen 0 sind und Züge - 2
+
+maxForestArea = 19 -- maximale Anzahl der belegten Zellen auf dem Spielfeld
+sizeFiguren = [(2,4),(1,3),(1,3),(2,2),(1,1)] -- alle Arten von Spielfiguren
 
 
+-- Funktion zur Eingabe der Größe des Weihnachtswaldgitters.  Die Größe muss >= 10 sein.
+inputFieldSize :: IO Int
+inputFieldSize = do
+    putStrLn "Geben Sie einen Wert für Weihnachtswaldgittergröße: "
+    input <- getLine
+    let size = convertStringToInt input
+    if size < 10 then do -- Rekursive Aufforderung, falls die Eingabe ungültig ist
+        putStrLn "Ungültige Größe.  Die Größe muss mindestens 10 betragen."
+        inputFieldSize
+    else return size
 
+
+-- Funktion zur Eingabe des Startpunkts für einen Baumhain.
+inputStartPunktBaumhain :: IO Coordinate
+inputStartPunktBaumhain = do
+    putStrLn "Geben Sie den Startpunkt (unten links z.B. (0,0)): "
+    input <- getLine
+    let startpunkt = convertStringToCoordinates input
+    if startpunkt == (-1,-1) then do -- Fehlerbehandlung für ungültige Eingabe
+        putStrLn "Ungültiger Baumhain Startpunkt. Bitte versuchen Sie es erneut."
+        inputStartPunktBaumhain
+    else return startpunkt
+
+
+-- Funktion zur Eingabe der Ausrichtung (Links oder Rechts) eines Baumhains.
+inputSizeBaumhain :: IO Orientation
+inputSizeBaumhain = do
+    putStrLn "Geben Sie die Position 2x4 - Links, 4x2 - Rechts fest: "
+    input <- getLine
+    let position = convertStringToOrientation input
+    if position == Nicht then do -- Fehlerbehandlung für ungültige Eingabe
+        putStrLn "Ungültige Baumhain Position. Bitte versuchen Sie es erneut."
+        inputSizeBaumhain
+    else return position
+
+
+-- Funktion zur Umwandlung eines Strings in einen Integer.  Gibt 0 zurück, falls die Umwandlung fehlschlägt.
+convertStringToInt :: String -> Int
+convertStringToInt str =
+  case reads str of
+    [(i, "")] -> i -- Erfolgreiche Umwandlung: Der String wurde vollständig in einen Integer (i) umgewandelt.  Der Reststring ist leer ("").
+    _ -> 0       -- Fehlgeschlagene Umwandlung: Entweder kein Integer im String oder der String enthielt zusätzliche Zeichen nach dem Integer.  In diesem Fall wird 0 zurückgegeben.
+
+-- Funktion zur Umwandlung eines Strings in Koordinaten.
+convertStringToCoordinates :: String -> Coordinate
+convertStringToCoordinates []  = (-1, -1)
+convertStringToCoordinates str =
+    let
+        parenRemoved = drop 1 $ init str  -- Klammern entfernen
+        parts = break (== ',') parenRemoved -- String an Komma trennen
+        xStr = fst parts -- x-Koordinate extrahieren
+        yStr = drop 1 $ snd parts -- y-Koordinate extrahieren
+        safeRead :: String -> Maybe Int -- Sichere Umwandlung in Integer
+        safeRead s =
+            case reads s of
+                [(x, "")] -> Just x
+                _ -> Nothing
+    in case (safeRead xStr, safeRead yStr) of
+        (Just x, Just y) -> (x, y)
+        _ -> (-1, -1) -- Fehlerwert bei ungültiger Eingabe
+
+
+-- Funktion zur Umwandlung eines Strings in eine Ausrichtung.
+convertStringToOrientation :: String -> Orientation
+convertStringToOrientation s 
+    | s == "Links"      = Links
+    | s == "Rechts"     = Rechts
+    | otherwise         = Nicht
+
+
+-- Funktion zum Erstellen eines Baumhain-Rechtecks.
+createRectangle :: Coordinate -> Orientation -> Coordinate -> Baumhain
+createRectangle (x, y) Links (l, w) = Rectangle {x = x, y = y, lengthX = l, widthY = w}
+createRectangle (x, y) Rechts (l, w) = Rectangle {x = x, y = y, lengthX = w, widthY = l}
+
+
+-- Funktion zur Eingabe der Spielfiguren (Baumhaine).
+inputSpielfiguren :: Int -> [Coordinate] -> IO [Baumhain]
+inputSpielfiguren n coords = mapM (processBaumhain n) coords
+
+
+-- Hilfsfunktion zum Verarbeiten eines einzelnen Baumhains.
+processBaumhain :: Int -> Coordinate -> IO Baumhain
+processBaumhain n (l, w) = do
+    putStrLn $ "Koordinaten für Baumhain " ++ show l ++ "x" ++ show w ++ " : "
+    startpunkt <- inputStartPunktBaumhain
+    position <- inputSizeBaumhain
+    let baumhain = createRectangle startpunkt position (l, w)
+    if checkBaumhain n baumhain then return baumhain else do --Überprüfung ob Platzierung möglich ist
+        putStrLn "Es ist unmöglich, diese Baumhain zu pflanzen! Bitte versuchen Sie es erneut."
+        processBaumhain n (l, w)
+
+-- Funktion zur Überprüfung der Baumhain-Platzierung. 
+checkBaumhain :: Int -> Baumhain -> Bool
+checkBaumhain n x = True  -- TODO:  Hier muss die eigentliche Überprüfungslogik implementiert werden!
 
 ------------------------------------------------------------------------------ Tests ---------------------------------------------------------------------------------
 
 main = do
-  putStrLn "-----------------------------------------------------A.2-----------------------------------------------------"
-  putStrLn ""
-  let bIPV1 = IPV1 (MT1 [(B,B)])
-      eIPV1 = IPV1 (MT1 [(E,E)])
-  putStrLn $ "vereinigeR  {} {(B,B)}: " ++ (zeige . vereinigeR leereMenge $ bIPV1)
-  putStrLn $ "vereinigeR {(B,B)} {(B,B)}: " ++ (zeige $ vereinigeR (bIPV1) (bIPV1))
-  putStrLn $ "vereinigeR {(B,B)} {(E,E)}: " ++ (zeige $ vereinigeR (bIPV1) (eIPV1))
-  putStrLn ""
-  putStrLn $ "komplementiereR . zieheab allMenge $ {(B,B)}: " ++ (zeige . komplementiereR . zieheab allMenge $ bIPV1)
-  putStrLn ""
+    n <- inputFieldSize
+    putStrLn $ "Weihnachtswaldgittergröße ist " ++ show n
+    baumhaine <- inputSpielfiguren n sizeFiguren
+    putStrLn $ "Baumhaine sind " ++ show baumhaine
+    putStrLn "-----------------------------------------------------A.2-----------------------------------------------------"
+    putStrLn ""
+    let bIPV1 = IPV1 (MT1 [(B,B)])
+        eIPV1 = IPV1 (MT1 [(E,E)])
+    putStrLn $ "vereinigeR  {} {(B,B)}: " ++ (zeige . vereinigeR leereMenge $ bIPV1)
+    putStrLn $ "vereinigeR {(B,B)} {(B,B)}: " ++ (zeige $ vereinigeR (bIPV1) (bIPV1))
+    putStrLn $ "vereinigeR {(B,B)} {(E,E)}: " ++ (zeige $ vereinigeR (bIPV1) (eIPV1))
+    putStrLn ""
+    putStrLn $ "komplementiereR . zieheab allMenge $ {(B,B)}: " ++ (zeige . komplementiereR . zieheab allMenge $ bIPV1)
+    putStrLn ""
