@@ -373,11 +373,11 @@ instance RelationPlus IstPartnerstadtVon1 where
 instance RelationPlus IstPartnerstadtVon3 where
     vereinigeR (IPV3 m1) (IPV3 m2) = IPV3 $ vereinigeMT3 m1 m2
 
---------------------------------------------------------------------------------- A.2 --------------------------------------------------------------------------
+--------------------------------------------------------------------------------- A.3 --------------------------------------------------------------------------
 type Coordinate = (Int, Int)
 data Baumhain = Rectangle { x :: Int, y :: Int, lengthX :: Int, widthY :: Int } deriving (Show, Eq) -- die Figur auf dem Spielfeld ist wie ein Schiff im Spiel Seeschlacht
 data Orientation = Links | Rechts | Nicht deriving (Show, Eq) -- Ausrichtung der Figur auf dem Spielfeld z.B. 2x4 - Links, 4x2 - Rechts                   
-type Field = [[Int]] -- ein Spielfeld, in dem alle "Zellen", die von einer Spielfigur besetzt werden, 1 sind, die freien Zellen 0 sind und Züge - 2
+type Field = [[Int]] -- ein Spielfeld, in dem alle "Zellen", die von einer Spielfigur besetzt werden, 1 sind, die freien Zellen 0 sind und Züge - 2, und Figur 1x1 - 3
 
 maxForestArea = 19 -- maximale Anzahl der belegten Zellen auf dem Spielfeld
 sizeFiguren = [(2,4),(1,3),(1,3),(2,2),(1,1)] -- alle Arten von Spielfiguren
@@ -395,6 +395,93 @@ inputFieldSize = do
     else return size
 
 
+-- Erzeugt ein zweidimensionales Spielfeld Field aus 0, 1 und 3.
+--               0: Leere Zelle
+--               1: Zelle belegt durch ein Rechteck (größer als 1x1)
+--               3: Zelle belegt durch ein 1x1 Rechteck
+
+createField :: [Baumhain] -> Int -> Field
+createField baumhaine n =
+    let field = replicate n (replicate n 0) -- Erzeuge ein mit Nullen gefülltes Spielfeld
+    in foldl (addBaumhain) field baumhaine  -- Füge die Rechtecke nacheinander hinzu
+
+addBaumhain :: Field -> Baumhain -> Field
+addBaumhain field rect =
+    let xCoord = x rect
+        yCoord = y rect
+        lenX = lengthX rect
+        lenY = widthY rect
+    in  myMapWithIndex (\rowIndex row -> -- Iteriere über die Zeilen
+            myMapWithIndex (\colIndex cell -> -- Iteriere über die Spalten
+                if colIndex >= xCoord && colIndex < xCoord + lenX && -- Überprüfe, ob die Koordinaten innerhalb des Rechtecks liegen
+                    rowIndex >= yCoord && rowIndex < yCoord + lenY then 
+                        if lenX == 1 && lenY == 1 then 3
+                        else 1 -- 3 für 1x1 Rechtecke, sonst 1
+                else cell -- Zelle unverändert lassen
+            ) row
+        ) field
+
+-- Custom recursive function to mimic MapWithIndex for lists of lists
+myMapWithIndex :: (Int -> a -> b) -> [a] -> [b]
+myMapWithIndex f [] = []
+myMapWithIndex f (x:xs) = f (0) x : myMapWithIndex (\i y -> f (i+1) y) xs
+
+
+
+-- Simuliert einen Spielzug auf dem Spielfeld.
+zug :: Coordinate -> Field -> IO Field
+zug (x,y) field = 
+    if x >= 0 && x < length field && y >= 0 && y < length (head field) then do -- Überprüfe die Gültigkeit der Koordinaten
+        let elem = getElement field x y -- Hole den Wert der Zelle an den gegebenen Koordinaten
+        case elem of
+            0 -> do
+                putStrLn "Mißerfolg!"
+                let newField = updateField x y 2 field
+                return newField
+            1 -> do
+                putStrLn "\nSie haben es geschafft, den Weihnachtsbaum auszublasen"
+                let newField = updateField x y 2 field
+                return newField
+            2 -> do 
+                putStrLn "Bitte versuchen Sie es erneut.\nSie haben bereits versucht, den Weihnachtsbaum in dieser Zelle auszublasen"
+                return field
+            3 -> do 
+                let buergermeister = checkBuergermeister field
+                case buergermeister of
+                    True -> putStrLn "\n!!!! Sie haben Respektlosigkeit gezeigt !!!!\n!!!! Das gegnerische Team hat gewonnen !!!!"
+                    False -> putStrLn "\n!!!! Herzlichen Glückwunsch !!!!\n!!!! Sie haben den Wettbewerb gewonnen !!!!"
+                return [[]]  -- Leeres Feld zurückgeben, da das Spiel beendet ist
+    else do
+        putStrLn "Ungültiger Coordinate. Bitte versuchen Sie es erneut."
+        return field -- Unverändertes Feld zurückgeben bei ungültigen Koordinaten
+
+-- Überprüft, ob im gegebenen Spielfeld noch mindestens ein Weihnachtsbaumhain größer als 1x1 vorhanden ist.
+checkBuergermeister :: Field -> Bool
+checkBuergermeister field = any (elem 1) field
+    
+-- Aktualisiert ein Element in einem zweidimensionalen Feld (Field).
+updateField :: Int -> Int -> Int -> Field -> Field
+updateField row col newElement field =
+    myMapWithIndex (\rowIndex r ->
+        if rowIndex == row then 
+            myMapWithIndex (\colIndex x -> if colIndex == col then newElement else x) r
+        else r
+    ) field
+
+-- Zugang zum Zellen auf dem Spielfeld
+getElement :: Field -> Int -> Int -> Int
+getElement field x y = field !! y !! x
+
+-- Gibt ein zweidimensionales Integer-Feld ([[Int]]) formatiert auf der Konsole aus.
+prettyPrintField :: [[Int]] -> IO ()
+prettyPrintField field = do
+    let revField = reverse field
+    putStrLn "+---+"
+    mapM_ (\row -> -- Iteriere über jede Zeile des gespiegelten Felds
+        putStrLn $ "+ " ++ unwords (map show row) ++ " +" -- Füge Begrenzungen links und rechts hinzu und formatiere die Zahlen
+        )revField
+    putStrLn "+---+"
+
 -- Funktion zur Eingabe des Startpunkts für einen Baumhain.
 inputStartPunktBaumhain :: IO Coordinate
 inputStartPunktBaumhain = do
@@ -408,14 +495,14 @@ inputStartPunktBaumhain = do
 
 
 -- Funktion zur Eingabe der Ausrichtung (Links oder Rechts) eines Baumhains.
-inputSizeBaumhain :: IO Orientation
-inputSizeBaumhain = do
-    putStrLn "Geben Sie die Position 2x4 - Links, 4x2 - Rechts fest: "
+inputSizeBaumhain :: Int -> Int -> IO Orientation
+inputSizeBaumhain x y = do
+    putStrLn $ "Geben Sie die Position " ++ show x ++"x"++ show y ++ " - Links, "++ show y ++ "x"++ show x ++" - Rechts fest: "
     input <- getLine
     let position = convertStringToOrientation input
     if position == Nicht then do -- Fehlerbehandlung für ungültige Eingabe
         putStrLn "Ungültige Baumhain Position. Bitte versuchen Sie es erneut."
-        inputSizeBaumhain
+        inputSizeBaumhain x y
     else return position
 
 
@@ -459,7 +546,7 @@ createRectangle (x, y) Links (l, w) = Rectangle {x = x, y = y, lengthX = l, widt
 createRectangle (x, y) Rechts (l, w) = Rectangle {x = x, y = y, lengthX = w, widthY = l}
 
 
-inputSpielfiguren :: Int -> [Baumhain] ->[(Int, Int)] -> IO [Baumhain]
+inputSpielfiguren :: Int -> [Baumhain] ->[Coordinate] -> IO [Baumhain]
 inputSpielfiguren n existingBaumhaine [] = return existingBaumhaine
 inputSpielfiguren n existingBaumhaine (x:xs) = do
   baumhaine <- processBaumhain n existingBaumhaine x
@@ -470,13 +557,13 @@ inputSpielfiguren n existingBaumhaine (x:xs) = do
   
 
 
-processBaumhain :: Int -> [Baumhain] -> (Int, Int) -> IO [Baumhain]
+processBaumhain :: Int -> [Baumhain] -> Coordinate -> IO [Baumhain]
 processBaumhain n existingBaumhaine (l, w) = do
     putStrLn $ "Koordinaten für Baumhain " ++ show l ++ "x" ++ show w ++ " : "
     startpunkt <- inputStartPunktBaumhain
-    position <- inputSizeBaumhain
+    position <- inputSizeBaumhain l w
     let baumhain = createRectangle startpunkt position (l, w)
-    putStrLn $ show existingBaumhaine
+    --putStrLn $ show existingBaumhaine
     if checkBaumhain baumhain existingBaumhaine n then do
         return $ existingBaumhaine ++ [baumhain]
     else do
@@ -528,8 +615,20 @@ checkBaumhain rect rectangles n =
 main = do
     n <- inputFieldSize
     putStrLn $ "Weihnachtswaldgittergröße ist " ++ show n
-    baumhaine <- inputSpielfiguren n existingBaumhaine sizeFiguren
-    putStrLn $ "Baumhaine sind " ++ show baumhaine
+    putStrLn ""
+    baumhaine1 <- inputSpielfiguren n existingBaumhaine sizeFiguren
+    putStrLn $ "Baumhaine №1 sind " ++ show baumhaine1
+    let field1 = createField baumhaine1 n
+    putStrLn ""
+    prettyPrintField field1
+    putStrLn ""
+
+    baumhaine2 <- inputSpielfiguren n existingBaumhaine sizeFiguren
+    putStrLn $ "Baumhaine №2 sind " ++ show baumhaine2
+    let field2 = createField baumhaine2 n
+    putStrLn ""
+    prettyPrintField field2
+
     putStrLn "-----------------------------------------------------A.2-----------------------------------------------------"
     putStrLn ""
     let bIPV1 = IPV1 (MT1 [(B,B)])
