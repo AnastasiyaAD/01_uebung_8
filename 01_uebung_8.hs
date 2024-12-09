@@ -375,13 +375,13 @@ instance RelationPlus IstPartnerstadtVon3 where
 
 --------------------------------------------------------------------------------- A.2 --------------------------------------------------------------------------
 type Coordinate = (Int, Int)
-data Baumhain = Rectangle { x :: Int, y :: Int, lengthX :: Int, widthY :: Int } deriving (Show) -- die Figur auf dem Spielfeld ist wie ein Schiff im Spiel Seeschlacht
+data Baumhain = Rectangle { x :: Int, y :: Int, lengthX :: Int, widthY :: Int } deriving (Show, Eq) -- die Figur auf dem Spielfeld ist wie ein Schiff im Spiel Seeschlacht
 data Orientation = Links | Rechts | Nicht deriving (Show, Eq) -- Ausrichtung der Figur auf dem Spielfeld z.B. 2x4 - Links, 4x2 - Rechts                   
 type Field = [[Int]] -- ein Spielfeld, in dem alle "Zellen", die von einer Spielfigur besetzt werden, 1 sind, die freien Zellen 0 sind und Züge - 2
 
 maxForestArea = 19 -- maximale Anzahl der belegten Zellen auf dem Spielfeld
 sizeFiguren = [(2,4),(1,3),(1,3),(2,2),(1,1)] -- alle Arten von Spielfiguren
-
+existingBaumhaine = []
 
 -- Funktion zur Eingabe der Größe des Weihnachtswaldgitters.  Die Größe muss >= 10 sein.
 inputFieldSize :: IO Int
@@ -459,32 +459,76 @@ createRectangle (x, y) Links (l, w) = Rectangle {x = x, y = y, lengthX = l, widt
 createRectangle (x, y) Rechts (l, w) = Rectangle {x = x, y = y, lengthX = w, widthY = l}
 
 
--- Funktion zur Eingabe der Spielfiguren (Baumhaine).
-inputSpielfiguren :: Int -> [Coordinate] -> IO [Baumhain]
-inputSpielfiguren n coords = mapM (processBaumhain n) coords
+inputSpielfiguren :: Int -> [Baumhain] ->[(Int, Int)] -> IO [Baumhain]
+inputSpielfiguren n existingBaumhaine [] = return existingBaumhaine
+inputSpielfiguren n existingBaumhaine (x:xs) = do
+  baumhaine <- processBaumhain n existingBaumhaine x
+  if baumhaine == [Rectangle { x = 0, y = 0, lengthX = 0, widthY = 0 }] then do 
+    inputSpielfiguren n existingBaumhaine (x:xs)
+  else do
+    inputSpielfiguren n baumhaine xs
+  
 
 
--- Hilfsfunktion zum Verarbeiten eines einzelnen Baumhains.
-processBaumhain :: Int -> Coordinate -> IO Baumhain
-processBaumhain n (l, w) = do
+processBaumhain :: Int -> [Baumhain] -> (Int, Int) -> IO [Baumhain]
+processBaumhain n existingBaumhaine (l, w) = do
     putStrLn $ "Koordinaten für Baumhain " ++ show l ++ "x" ++ show w ++ " : "
     startpunkt <- inputStartPunktBaumhain
     position <- inputSizeBaumhain
     let baumhain = createRectangle startpunkt position (l, w)
-    if checkBaumhain n baumhain then return baumhain else do --Überprüfung ob Platzierung möglich ist
+    putStrLn $ show existingBaumhaine
+    if checkBaumhain baumhain existingBaumhaine n then do
+        return $ existingBaumhaine ++ [baumhain]
+    else do
         putStrLn "Es ist unmöglich, diese Baumhain zu pflanzen! Bitte versuchen Sie es erneut."
-        processBaumhain n (l, w)
+        return [Rectangle { x = 0, y = 0, lengthX = 0, widthY = 0 }]
 
--- Funktion zur Überprüfung der Baumhain-Platzierung. 
-checkBaumhain :: Int -> Baumhain -> Bool
-checkBaumhain n x = True  -- TODO:  Hier muss die eigentliche Überprüfungslogik implementiert werden!
+
+-- Überprüft, ob sich zwei Rechtecke überschneiden.
+-- r1, r2: Die zu vergleichenden Rechtecke.
+-- Rückgabewert: True, wenn sich die Rechtecke überschneiden, False sonst.
+intersects :: Baumhain -> Baumhain -> Bool
+intersects r1 r2 =
+  xOverlap && yOverlap
+  where
+    -- Berechnung der minimalen und maximalen x-Koordinaten für Rechteck 1
+    r1xMin = x r1
+    r1xMax = x r1 + lengthX r1
+    -- Berechnung der minimalen und maximalen y-Koordinaten für Rechteck 1
+    r1yMin = y r1
+    r1yMax = y r1 + widthY r1
+    -- Berechnung der minimalen und maximalen x-Koordinaten für Rechteck 2
+    r2xMin = x r2
+    r2xMax = x r2 + lengthX r2
+    -- Berechnung der minimalen und maximalen y-Koordinaten für Rechteck 2
+    r2yMin = y r2
+    r2yMax = y r2 + widthY r2
+    -- Überlappung in x-Richtung:  Es gibt keine Überlappung, wenn das Maximum des einen Rechtecks kleiner als das Minimum des anderen ist.
+    xOverlap = not (r1xMax < r2xMin || r2xMax < r1xMin)
+    -- Überlappung in y-Richtung:  Es gibt keine Überlappung, wenn das Maximum des einen Rechtecks kleiner als das Minimum des anderen ist.
+    yOverlap = not (r1yMax < r2yMin || r2yMax < r1yMin)
+
+
+-- Überprüft, ob ein Rechteck auf einem Spielfeld platziert werden kann, ohne andere Rechtecke zu überschneiden.
+-- rect: Das zu platzierende Rechteck.
+-- rectangles: Liste der bereits platzierten Rechtecke.
+-- n: Die Größe des Spielfelds (n x n).
+-- Rückgabewert: True, wenn das Rechteck platziert werden kann, False sonst.
+checkBaumhain :: Baumhain -> [Baumhain] -> Int -> Bool
+checkBaumhain rect rectangles n =
+  inBounds && notIntersects
+  where
+    -- Überprüft, ob das Rechteck innerhalb der Spielfeldgrenzen liegt.
+    inBounds =  0 <= x rect && x rect + lengthX rect <= n && 0 <= y rect && y rect + widthY rect <= n
+    -- Überprüft, ob das Rechteck keines der bereits platzierten Rechtecke überschneidet.
+    notIntersects = all (not . intersects rect) rectangles
 
 ------------------------------------------------------------------------------ Tests ---------------------------------------------------------------------------------
 
 main = do
     n <- inputFieldSize
     putStrLn $ "Weihnachtswaldgittergröße ist " ++ show n
-    baumhaine <- inputSpielfiguren n sizeFiguren
+    baumhaine <- inputSpielfiguren n existingBaumhaine sizeFiguren
     putStrLn $ "Baumhaine sind " ++ show baumhaine
     putStrLn "-----------------------------------------------------A.2-----------------------------------------------------"
     putStrLn ""
