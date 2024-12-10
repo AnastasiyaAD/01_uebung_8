@@ -266,7 +266,7 @@ istTransitivStaedtepaar orig ((l, l'):ps) =
 
 -- (a)
 instance Defaultable Staedtepaar where
-    defaultValue = allPairs
+    defaultValue = allPairs   
 data IstPartnerstadtVon1 = IPV1 (MT1 (Landeshauptstadt, Landeshauptstadt))
 
 
@@ -379,9 +379,17 @@ data Baumhain = Rectangle { x :: Int, y :: Int, lengthX :: Int, widthY :: Int } 
 data Orientation = Links | Rechts | Nicht deriving (Show, Eq) -- Ausrichtung der Figur auf dem Spielfeld z.B. 2x4 - Links, 4x2 - Rechts                   
 type Field = [[Int]] -- ein Spielfeld, in dem alle "Zellen", die von einer Spielfigur besetzt werden, 1 sind, die freien Zellen 0 sind und Züge - 2, und Figur 1x1 - 3
 
-maxForestArea = 19 -- maximale Anzahl der belegten Zellen auf dem Spielfeld
 sizeFiguren = [(2,4),(1,3),(1,3),(2,2),(1,1)] -- alle Arten von Spielfiguren
 existingBaumhaine = []
+
+
+
+
+---------------------------- ______Arbeiten mit dem Spielfeld______
+
+
+
+
 
 -- Funktion zur Eingabe der Größe des Weihnachtswaldgitters.  Die Größe muss >= 10 sein.
 inputFieldSize :: IO Int
@@ -426,6 +434,54 @@ myMapWithIndex :: (Int -> a -> b) -> [a] -> [b]
 myMapWithIndex f [] = []
 myMapWithIndex f (x:xs) = f (0) x : myMapWithIndex (\i y -> f (i+1) y) xs
 
+-- Gibt ein zweidimensionales Integer-Feld ([[Int]]) formatiert auf der Konsole aus.
+prettyPrintField :: Field -> IO ()
+prettyPrintField field = do
+    let revField = reverse field
+    putStrLn "+---+"
+    mapM_ (\row -> -- Iteriere über jede Zeile des gespiegelten Felds
+        putStrLn $ "+ " ++ unwords (map show row) ++ " +" -- Füge Begrenzungen links und rechts hinzu und formatiere die Zahlen
+        )revField
+    putStrLn "+---+"
+
+
+
+
+
+---------------------------- ______Spiellogik______
+-- Funktion zur Eingabe Coordinate Zug.
+inputCoordinate :: IO Coordinate
+inputCoordinate = do
+    putStrLn "Geben Sie Coordinate z.B. (0,0): "
+    input <- getLine
+    let startpunkt = convertStringToCoordinates input
+    if startpunkt == (-1,-1) then do -- Fehlerbehandlung für ungültige Eingabe
+        putStrLn "Ungültiger Coordinate. Bitte versuchen Sie es erneut."
+        inputCoordinate
+    else return startpunkt
+
+play :: Int -> Field -> Field -> Int-> IO ()
+play n field1 field2 team = do 
+    if field1 == [[]] || field2 == [[]] then do
+        putStrLn $ "Ende des Spiels! Team "++ show team ++ " hat gewonnen"
+    else do
+        case team of
+            1 -> do
+                putStrLn $ "Jetzt ist Team 1 an der Reihe"
+                coordinate <- inputCoordinate
+                newField <- zug coordinate field2
+                if newField == field2 then do
+                    play n field1 field2 1
+                else do
+                    play n field1 newField 2
+            2 -> do 
+                putStrLn $ "Jetzt ist Team 2 an der Reihe"
+                coordinate <- inputCoordinate
+                newField <- zug coordinate field1
+                if newField == field1 then do
+                    play n field1 field2 2
+                else do
+                    play n newField field2 1
 
 
 -- Simuliert einen Spielzug auf dem Spielfeld.
@@ -435,7 +491,7 @@ zug (x,y) field =
         let elem = getElement field x y -- Hole den Wert der Zelle an den gegebenen Koordinaten
         case elem of
             0 -> do
-                putStrLn "Mißerfolg!"
+                putStrLn $ "Mißerfolg! (" ++ show x ++ ", " ++ show y ++ ")"
                 let newField = updateField x y 2 field
                 return newField
             1 -> do
@@ -472,15 +528,13 @@ updateField row col newElement field =
 getElement :: Field -> Int -> Int -> Int
 getElement field x y = field !! y !! x
 
--- Gibt ein zweidimensionales Integer-Feld ([[Int]]) formatiert auf der Konsole aus.
-prettyPrintField :: [[Int]] -> IO ()
-prettyPrintField field = do
-    let revField = reverse field
-    putStrLn "+---+"
-    mapM_ (\row -> -- Iteriere über jede Zeile des gespiegelten Felds
-        putStrLn $ "+ " ++ unwords (map show row) ++ " +" -- Füge Begrenzungen links und rechts hinzu und formatiere die Zahlen
-        )revField
-    putStrLn "+---+"
+
+
+
+---------------------------- ______Arbeiten mit Baumhaine______
+
+
+
 
 -- Funktion zur Eingabe des Startpunkts für einen Baumhain.
 inputStartPunktBaumhain :: IO Coordinate
@@ -571,6 +625,14 @@ processBaumhain n existingBaumhaine (l, w) = do
         return [Rectangle { x = 0, y = 0, lengthX = 0, widthY = 0 }]
 
 
+
+
+
+---------------------------- ______Die Logik des Hinzufügens einer neuen Form auf das Spielfeld______
+
+
+
+
 -- Überprüft, ob sich zwei Rechtecke überschneiden.
 -- r1, r2: Die zu vergleichenden Rechtecke.
 -- Rückgabewert: True, wenn sich die Rechtecke überschneiden, False sonst.
@@ -618,16 +680,18 @@ main = do
     putStrLn ""
     baumhaine1 <- inputSpielfiguren n existingBaumhaine sizeFiguren
     putStrLn $ "Baumhaine №1 sind " ++ show baumhaine1
+    putStrLn ""
     let field1 = createField baumhaine1 n
-    putStrLn ""
-    prettyPrintField field1
-    putStrLn ""
-
     baumhaine2 <- inputSpielfiguren n existingBaumhaine sizeFiguren
     putStrLn $ "Baumhaine №2 sind " ++ show baumhaine2
     let field2 = createField baumhaine2 n
-    putStrLn ""
+    putStrLn "Team 1"
+    prettyPrintField field1
+    putStrLn "Team 2"
     prettyPrintField field2
+    putStrLn ""
+
+    play n field1 field2 1 
 
     putStrLn "-----------------------------------------------------A.2-----------------------------------------------------"
     putStrLn ""
